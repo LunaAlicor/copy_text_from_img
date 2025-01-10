@@ -1,43 +1,41 @@
 import sys
 import os
 import pyperclip
-from PyQt5.QtWidgets import QApplication, QRubberBand, QMainWindow
+from PyQt5.QtWidgets import QApplication, QRubberBand, QMainWindow, QMenu, QAction
 from PyQt5.QtCore import Qt, QRect, QSize
 from PyQt5.QtGui import QGuiApplication, QPixmap, QPainter, QScreen, QCursor
 from pynput import keyboard
 import pytesseract
 from PIL import Image
-# import logging
-# from functools import wraps
 
 
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
-#
-#
-# def log_method(func):
-#     @wraps(func)
-#     def wrapper(*args, **kwargs):
-#         logger.info(f"Calling method {func.__name__} with args: {args}, kwargs: {kwargs}")
-#         result = func(*args, **kwargs)
-#         logger.info(f"Method {func.__name__} returned: {result}")
-#         return result
-#     return wrapper
-#
-#
-# def log_all_methods(cls):
-#     for attr_name, attr_value in cls.__dict__.items():
-#         if callable(attr_value) and not attr_name.startswith("__"):
-#             setattr(cls, attr_name, log_method(attr_value))
-#     return cls
+LANGUAGES = {
+    "ENGLISH": "eng",
+    "RUSSIAN": "rus",
+    "RUSSIAN+ENGLISH": "rus+eng",
+    "GERMAN": "deu",
+    "SPANISH": "spa",
+    "SPANISH LATIN AMERICA": "spa",  # Latin America
+    "ITALIAN": "ita",
+    "FRENCH": "fra",
+    "BRAZILIAN PORTUGUESE": "por",
+    "POLISH": "pol",
+    "CZECH": "ces",
+    "UKRAINIAN": "ukr",
+    "TURKISH": "tur",
+    "CHINESE TRADITIONAL": "chi_tra",
+    "CHINESE SIMPLIFIED": "chi_sim",
+    "KOREAN": "kor",
+    "JAPANESE": "jpn",
+    "THAI": "tha",
+}
 
+current_language = "eng"
 
-#  @log_all_methods
 class ScreenshotTool(QMainWindow):
     def __init__(self, screen):
         super().__init__()
 
-        # Получаем скриншот экрана, на котором произошел вызов
         self.full_screenshot = screen.grabWindow(0)
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -81,29 +79,60 @@ class ScreenshotTool(QMainWindow):
         cropped_pixmap.save("screenshot.png", "png")
         print("Screenshot сохранен: screenshot.png")
 
-        # Используем pytesseract для извлечения текста с изображения
         self.extract_text_from_image(cropped_pixmap)
 
     def extract_text_from_image(self, pixmap):
+        global current_language
+
         image = pixmap.toImage()
         image.save("temp_image.png")
 
         pil_image = Image.open("temp_image.png")
 
-        text = pytesseract.image_to_string(pil_image, lang='eng+rus')
+        text = pytesseract.image_to_string(pil_image, lang=current_language)
 
         print("Распознанный текст:")
         print(text)
         pyperclip.copy(text)
 
-
 def get_current_screen():
-    # Определяем экран, на котором находится курсор или приложение
     screen = QGuiApplication.screenAt(QCursor.pos())
     if not screen:
-        screen = QGuiApplication.primaryScreen()  # Если не удалось, используем основной экран
+        screen = QGuiApplication.primaryScreen()
     return screen
 
+def show_menu():
+    global current_language
+
+    app = QApplication(sys.argv)
+    menu = QMenu()
+
+    language_menu = QMenu("Сменить язык", menu)
+
+    for language_name, language_code in LANGUAGES.items():
+        language_action = QAction(language_name, language_menu)
+
+        def set_language(language_name=language_name, code=language_code):
+            global current_language
+            current_language = code
+            print(f"Язык изменен на {language_name} ({code})")
+
+        language_action.triggered.connect(lambda checked, name=language_name, code=language_code: set_language(name, code))
+        language_menu.addAction(language_action)
+
+    close_program_action = QAction("Закрыть программу", menu)
+
+    def close_program():
+        print("Программа закрыта")
+        sys.exit()
+
+    close_program_action.triggered.connect(close_program)
+
+    menu.addMenu(language_menu)
+    menu.addAction(close_program_action)
+
+    cursor_pos = QCursor.pos()
+    menu.exec_(cursor_pos)
 
 def on_key_press(key):
     try:
@@ -113,12 +142,16 @@ def on_key_press(key):
             screenshot_tool = ScreenshotTool(screen)
             screenshot_tool.show()
             app.exec_()
+
+        elif key == keyboard.Key.home:
+            show_menu()
+
     except AttributeError:
         pass
 
-
 if __name__ == "__main__":
     print("Чтобы извлечь текст с изображения, нужно нажать клавишу 'insert' и выделить область")
+    print("Нажмите 'Home' для открытия меню")
     pytesseract.pytesseract.tesseract_cmd = os.path.join(os.getcwd(), "tess", "tesseract.exe")
     with keyboard.Listener(on_press=on_key_press) as listener:
         listener.join()
